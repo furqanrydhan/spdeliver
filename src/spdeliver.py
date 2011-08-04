@@ -59,10 +59,13 @@ class _delivery_service(object):
         pass
     
 class receipt(object):
-    def __init__(self, recipients, link=None, timestamp=None):
+    def __init__(self, type, recipients, link=None, timestamp=None):
+        self.type = type
         self.recipients = recipients
         self.link = link
         self.timestamp = timestamp or time.time()
+    def __str__(self):
+        return 'Delivered ' + self.type + ' message to ' + ', '.join(self.recipients) + ' at ' + time.ctime(self.timestamp) + (' (' + self.link + ')' if self.link is not None else '')
 
 class email_service(_delivery_service):
     def __init__(self, **kwargs):
@@ -82,9 +85,13 @@ class email_service(_delivery_service):
             assert('from' in message)
         except AssertionError:
             raise ParameterMissing
-        
-        envelope = email.mime.multipart.MIMEMultipart('alternative')
-        envelope['to'] = message['to']
+
+        envelope = email.mime.multipart.MIMEMultipart('alternative')        
+        recipients = []
+        for key in ['to', 'cc', 'bcc']:
+            if key in ['to', 'cc']:
+                envelope[key] = ', '.join(message.get(key, []) if isinstance(message.get(key, []), list) else [message[key]])
+            recipients.extend(message.get(key, []) if isinstance(message.get(key, []), list) else [message[key]])
         envelope['from'] = message['from']
         envelope['subject'] = message['subject']
         for image in message.get('images', {}):
@@ -113,12 +120,8 @@ class email_service(_delivery_service):
             body = email.mime.text.MIMEText(message['html'], 'html')
             body.set_charset('utf-8')
             envelope.attach(body)
-        recipients = [envelope['to']]
-        for bcc in message.get('bcc', []):
-            if bcc.strip() != '':
-                recipients.append(bcc.strip())
-        print self._server().sendmail(envelope['from'], recipients, envelope.as_string())
-        return receipt(recipients)
+        self._server().sendmail(envelope['from'], recipients, envelope.as_string())
+        return receipt('email', recipients)
 
 class facebook_service(_delivery_service):
     def __init__(self, **kwargs):
@@ -160,7 +163,7 @@ class facebook_service(_delivery_service):
                 envelope[key] = json.dumps(message[key])
         try:
             fb_status_id = self._api().put_object(message.get('target', 'me'), message.get('type', 'feed'), **envelope)['id']
-            return receipt(target, 'http://www.facebook.com/' + fb_status_id.split('_')[0] + '/posts/' + fb_status_id.split('_')[1])
+            return receipt('facebook', [target], 'http://www.facebook.com/' + fb_status_id.split('_')[0] + '/posts/' + fb_status_id.split('_')[1])
         except facebook.GraphAPIError as e:
             if '(#341)' in e.message:
                 raise RateLimited(300)
