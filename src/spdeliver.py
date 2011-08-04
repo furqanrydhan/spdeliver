@@ -127,24 +127,33 @@ class facebook_service(_delivery_service):
     def __init__(self, **kwargs):
         _delivery_service.__init__(self, **kwargs)
         self.__api = None
-        self.__fb_access_token = None
+        self._fb_access_token = None
+        self._fb_id = None
     def _api(self):
-        assert(self.__fb_access_token is not None)
+        assert(self._fb_access_token is not None)
         if self.__api is None:
-            self.__api = facebook.GraphAPI(self.__fb_access_token)
+            self.__api = facebook.GraphAPI(self._fb_access_token)
+            self._fb_id = self.__api.get_object('me')['id']
         return self.__api
-    def authenticate(self, kwargs):
+    def authenticate(self, **kwargs):
         self.__api = None
-        self.__fb_access_token = kwargs['fb_access_token']
+        self._fb_id = None
+        self._fb_access_token = kwargs['fb_access_token']
+        #try:
+        self._api()
+        #except:
+        #    raise CredentialsInvalid
     def deliver(self, message):
         if message.get('fb_access_token', None) is not None:
-            if self.__api is None or message['fb_access_token'] != self.__fb_access_token:
+            if self.__api is None or message['fb_access_token'] != self._fb_access_token:
                 self.authenticate(**message)
         try:
             # Must be authed
             assert(self.__api is not None)
         except AssertionError:
-            raise ParameterMissing
+            raise ParameterMissing('fb_access_token')
+        
+        envelope = {}
         # Here are some keys we recognize:
         for key in ['message', 'picture', 'name', 'caption', 'description', 'link']:
 #        for (facebook_key, template_key) in [
@@ -162,42 +171,55 @@ class facebook_service(_delivery_service):
             if message.get(key, None) is not None:
                 envelope[key] = json.dumps(message[key])
         try:
-            fb_status_id = self._api().put_object(message.get('target', 'me'), message.get('type', 'feed'), **envelope)['id']
-            return receipt('facebook', [target], 'http://www.facebook.com/' + fb_status_id.split('_')[0] + '/posts/' + fb_status_id.split('_')[1])
+            fb_status_id = self._api().put_object(message.get('to', 'me'), message.get('type', 'feed'), **envelope)['id']
+            return receipt('facebook', [message.get('to', self._fb_id)], 'http://www.facebook.com/' + fb_status_id.split('_')[0] + '/posts/' + fb_status_id.split('_')[1])
         except facebook.GraphAPIError as e:
             if '(#341)' in e.message:
                 raise RateLimited(300)
             else:
                 raise
 
-#class TwitterDeliveryMechanism(DeliveryMechanism):
-#    def package(self, message_entry, message, context_evaluation):
-#        user = context_evaluation['users'].get('from', context_evaluation['users']['to'])
-#        try:
-#            return {
-#                'text':message['text'],
-#                'token':unicode(user['credentials']['twitter']['twitter_token']),
-#                'secret':unicode(user['credentials']['twitter']['twitter_secret']),
-#                'username':unicode(user['credentials']['twitter'].get('twitter_id', user['profile'].get('twitter_username'))),
-#            }
-#        except KeyError:
-#            if user['flags'].get('twitter_credentials_pending', False):
-#                raise CredentialsPending
-#            else:
-#                raise CompositionImpossible('Missing Twitter creds')
-#    def deliver(self, envelope):
-#        try:
-#            api = twitter.Api(
-#                consumer_key=self._settings['twitter']['key'],
-#                consumer_secret=self._settings['twitter']['secret'],
-#                access_token_key=envelope['token'],
-#                access_token_secret=envelope['secret'],
-#            )
-#            tweet_id = str(api.PostUpdate(envelope['text']).AsDict()['id'])
-#            return {'tweet_id':tweet_id, 'link':'http://www.twitter.com/' + envelope['username'] + '/status/' + tweet_id}
-#        except:
-#            raise
-#
+class twitter_service(_delivery_service):
+    def __init__(self, **kwargs):
+        try:
+            assert('consumer_key' in kwargs)
+        except AssertionError:
+            raise ParameterMissing('consumer_key')
+        try:
+            assert('consumer_secret' in kwargs)
+        except AssertionError:
+            raise ParameterMissing('consumer_secret')
+        _delivery_service.__init__(self, **kwargs)
+        self.__api = None
+        self._consumer_key = kwargs['consumer_key']
+        self._consumer_secret = kwargs['consumer_secret']
+        self._access_token_key = None
+        self._access_token_secret = None
+        self._username = None
+    def _api(self):
+        assert(self._access_token_key is not None)
+        assert(self._access_token_secret is not None)
+        if self.__api is None:
+            self.__api = twitter.Api(
+                consumer_key=self._consumer_key,
+                consumer_secret=self._consumer_secret,
+                access_token_key=self._access_token_key,
+                access_token_secret=self._access_token_secret,
+            )
+            self._username = VerifyCredentials().AsDict()['screen_name']
+        return self.__api
+    def authenticate(self, **kwargs):
+        self.__api = None
+        self._access_token_key = kwargs['access_token_key']
+        self._access_token_secret = kwargs['access_token_secret']
+    def deliver(self, message):
+        assert('text' in message)
+        if 'to' in message:
+            tweet_id = self._api.PostDirectMessage(message['to'], message['text']).AsDict()['id']
+        else:
+            tweet_id = self._api.PostUpdate(message['text']).AsDict()['id']
+        return receipt('twitter', [message.get('to', self._username)], 'http://www.twitter.com/' + envelope['username'] + '/status/' + tweet_id)
+
 #class TumblrDeliveryMechanism(DeliveryMechanism):
 #    def package(self, message_entry, message, context_evaluation):
 #        user = context_evaluation['users'].get('from', context_evaluation['users']['to'])
@@ -336,6 +358,6 @@ class facebook_service(_delivery_service):
 # convenience for one-off operations, demonstrations, and to enable sloppy
 # engineering so I can have something to look good compared to.
 def deliver(service, message):
-    for delivery in [email_delivery, facebook_delivery]:
+    for delivery in [email_delivery, facebook_delivery, twitter_delivery]:
         service = delivery(**service)
         print service.deliver(message)
