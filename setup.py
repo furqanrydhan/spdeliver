@@ -14,8 +14,11 @@ def setup():
         py_modules=[
             'spdeliver',
         ],
+        dependency_links=[
+            '-e git+https://github.com/facebook/python-sdk.git#egg=facebook-python-sdk',
+        ],
         install_requires=[
-            'git+https://github.com/facebook/python-sdk.git#egg=facebook-python-sdk',
+            'facebook-python-sdk',
             'python-twitter',
             'oauth2',
             'gdata',
