@@ -206,7 +206,7 @@ class twitter_service(_delivery_service):
                 access_token_key=self._access_token_key,
                 access_token_secret=self._access_token_secret,
             )
-            self._username = VerifyCredentials().AsDict()['screen_name']
+            self._username = self.__api.VerifyCredentials().AsDict()['screen_name']
         return self.__api
     def authenticate(self, **kwargs):
         self.__api = None
@@ -215,10 +215,10 @@ class twitter_service(_delivery_service):
     def deliver(self, message):
         assert('text' in message)
         if 'to' in message:
-            tweet_id = self._api.PostDirectMessage(message['to'], message['text']).AsDict()['id']
+            tweet_id = self._api().PostDirectMessage(message['to'], message['text']).AsDict()['id']
         else:
-            tweet_id = self._api.PostUpdate(message['text']).AsDict()['id']
-        return receipt('twitter', [message.get('to', self._username)], 'http://www.twitter.com/' + envelope['username'] + '/status/' + tweet_id)
+            tweet_id = self._api().PostUpdate(message['text']).AsDict()['id']
+        return receipt('twitter', [message.get('to', self._username)], 'http://www.twitter.com/' + self.__username + '/status/' + tweet_id)
 
 #class TumblrDeliveryMechanism(DeliveryMechanism):
 #    def package(self, message_entry, message, context_evaluation):
