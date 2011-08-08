@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import copy
 import email.mime.image
 import email.mime.multipart
 import email.mime.text
@@ -11,6 +12,7 @@ import time
 import traceback
 import urllib
 import urllib2
+import xml.etree.ElementTree
 
 import atom
 import facebook
@@ -156,15 +158,6 @@ class facebook_service(_delivery_service):
         envelope = {}
         # Here are some keys we recognize:
         for key in ['message', 'picture', 'name', 'caption', 'description', 'link']:
-#        for (facebook_key, template_key) in [
-#            ('message', 'text'),
-#            ('picture', 'image'),
-#            ('name', 'title'),
-#            ('caption', 'caption'),
-#            ('description', 'description'),
-#            ('link', 'link'),
-#            ('target', 'target'),
-#        ]:
             if message.get(key, None) is not None and message[key].strip() != '':
                 envelope[key] = message[key]
         for key in ['actions']:
@@ -220,97 +213,124 @@ class twitter_service(_delivery_service):
             tweet_id = self._api().PostUpdate(message['text']).AsDict()['id']
         return receipt('twitter', [message.get('to', self._username)], 'http://www.twitter.com/' + self.__username + '/status/' + tweet_id)
 
-#class TumblrDeliveryMechanism(DeliveryMechanism):
-#    def package(self, message_entry, message, context_evaluation):
-#        user = context_evaluation['users'].get('from', context_evaluation['users']['to'])
-#        try:
-#            envelope = {
-#                'token':unicode(user['credentials']['tumblr']['tumblr_token']),
-#                'secret':unicode(user['credentials']['tumblr']['tumblr_secret']),
-#                'username':unicode(user['credentials']['tumblr']['tumblr_id']),
-#                'generator':self._settings['messaging']['domain'],
-#            }
-#        except KeyError:
-#            if user['flags'].get('tumblr_credentials_pending', False):
-#                raise CredentialsPending
-#            else:
-#                raise CompositionImpossible('Missing Tumblr creds')
-#        for (tumblr_key, template_key) in [
-#            ('type', 'type'),
-#            ('title', 'title'),
-#            ('caption', 'caption'),
-#            ('source', 'source'),
-#            ('click-through-url', 'click-through-url'),
-#        ]:
-#            if template_key in message and template_key != '':
-#                envelope[tumblr_key] = message[template_key]
-#        return envelope
-#    def deliver(self, envelope):
-#        try:
-#            url = 'http://www.tumblr.com/api/write'
-#            username = envelope['username']
-#            del envelope['username']
-#        
-#            envelope['oauth_version'] = '1.0'
-#            envelope['oauth_nonce'] = oauth2.generate_nonce()
-#            envelope['oauth_timestamp'] = int(time.time())
-#
-#            token = oauth2.Token(key=envelope['token'], secret=envelope['secret'])
-#            del envelope['token']
-#            del envelope['secret']
-#            consumer = oauth2.Consumer(key=self._settings['tumblr']['key'], secret=self._settings['tumblr']['secret'])
-#
-#            envelope['oauth_token'] = token.key
-#            envelope['oauth_consumer_key'] = consumer.key
-#
-#            req = oauth2.Request(method='POST', url=url, parameters=envelope)
-#            signature_method = oauth2.SignatureMethod_HMAC_SHA1()
-#            req.sign_request(signature_method, consumer, token)
-#
-#            tumblr_post_id = urllib2.urlopen(url, data=req.to_postdata()).read().strip('"')
-#            return {'tumblr_post_id':tumblr_post_id, 'link':'http://' + username + '.tumblr.com/post/' + tumblr_post_id}
-#        except:
-#            raise
-#        
-#class BloggerDeliveryMechanism(DeliveryMechanism):
-#    def package(self, message_entry, message, context_evaluation):
-#        user = context_evaluation['users'].get('from', context_evaluation['users']['to'])
-#        try:
-#            envelope = {
-#                'token':str(user['credentials']['blogger']['blogger_token']),
-#                'secret':str(user['credentials']['blogger']['blogger_secret']),
-#            }
-#        except KeyError:
-#            if user['flags'].get('blogger_credentials_pending', False):
-#                raise CredentialsPending
-#            else:
-#                raise CompositionImpossible('Missing Blogger creds')
-#        for (blogger_key, template_key) in [
-#            ('title', 'title'),
-#            ('content', 'content'),
-#        ]:
-#            if template_key in message and template_key != '':
-#                envelope[blogger_key] = message[template_key]
-#        return envelope
-#    def deliver(self, envelope):
-#        try:
-#            blogger_service = gdata.blogger.service.BloggerService(source=self._settings['blogger']['source'])
-#            blogger_service.SetOAuthInputParameters(
-#                gdata.auth.OAuthSignatureMethod.HMAC_SHA1,
-#                self._settings['blogger']['key'],
-#                consumer_secret=self._settings['blogger']['secret'])
-#            blogger_token = gdata.auth.OAuthToken(key=envelope['token'], secret=envelope['secret'], scopes=[gdata.service.CLIENT_LOGIN_SCOPES['blogger']], oauth_input_params=blogger_service.GetOAuthInputParameters())
-#            blogger_service.SetOAuthToken(blogger_token)
-#            feed = blogger_service.GetBlogFeed()
-#            blog_id = feed.entry[0].GetSelfLink().href.split("/")[-1]
-#            entry = gdata.GDataEntry()
-#            entry.title = atom.Title('xhtml', envelope['title'])
-#            entry.content = atom.Content(content_type='html', text=envelope['content'])
-#            receipt = blogger_service.Post(entry, '/feeds/' + blog_id + '/posts/default')
-#            return {'blogger_post_id':receipt.id.text, 'link':receipt.GetAlternateLink().href}
-#        except:
-#            raise
-#            
+class tumblr_service(_delivery_service):
+    def __init__(self, **kwargs):
+        try:
+            assert('consumer_key' in kwargs)
+        except AssertionError:
+            raise ParameterMissing('consumer_key')
+        try:
+            assert('consumer_secret' in kwargs)
+        except AssertionError:
+            raise ParameterMissing('consumer_secret')
+        try:
+            assert('generator' in kwargs)
+        except AssertionError:
+            raise ParameterMissing('generator')
+        _delivery_service.__init__(self, **kwargs)
+        self._consumer_key = kwargs['consumer_key']
+        self._consumer_secret = kwargs['consumer_secret']
+        self._generator = kwargs['generator']
+        self._consumer = oauth2.Consumer(key=self._consumer_key, secret=self._consumer_secret)
+        self._access_token_key = None
+        self._access_token_secret = None
+        self._username = None
+        self._token = None
+    def _do(self, url, parameters={}, method='POST'):
+        envelope = {
+            'oauth_version':'1.0',
+            'oauth_nonce':oauth2.generate_nonce(),
+            'oauth_timestamp':int(time.time()),
+            'oauth_token':self._token.key,
+            'oauth_consumer_key':self._consumer.key,
+        }
+        envelope.update(parameters)
+        req = oauth2.Request(method=method, url=url, parameters=envelope)
+        signature_method = oauth2.SignatureMethod_HMAC_SHA1()
+        req.sign_request(signature_method, self._consumer, self._token)
+
+        return urllib2.urlopen(url, data=req.to_postdata()).read()
+    def authenticate(self, **kwargs):
+        self._username = None
+        self._token = None
+        self._access_token = kwargs['access_token_key']
+        self._access_token_secret = kwargs['access_token_secret']
+        self._token = oauth2.Token(key=self._access_token, secret=self._access_token_secret)
+        
+        response = self._do('http://www.tumblr.com/api/authenticate')
+        for blog in xml.etree.ElementTree.fromstring(response).findall('tumblelog'):
+            if blog.attrib.get('is-primary', 'no') == 'yes':
+                self._username = blog.attrib['name']
+                break
+        assert(self._username is not None)
+    def deliver(self, message):
+        assert('type' in message)
+        assert('title' in message)
+        if message['type'] in ['photo']:
+            assert('caption' in message)
+            assert('source' in message)
+            assert('click-through-url' in message)
+        elif message['type'] in ['regular']:
+            assert('body' in message)
+        try:
+            assert(self._username is not None)
+            assert(self._token is not None)
+        except AssertionError:
+            self.authenticate(**message)
+
+        response = self._do('http://www.tumblr.com/api/write', message)
+        return receipt('tumblr', [self._username], 'http://' + self._username + '.tumblr.com/post/' + response.strip('"'))
+
+class blogger_service(_delivery_service):
+    def __init__(self, **kwargs):
+        try:
+            assert('consumer_key' in kwargs)
+        except AssertionError:
+            raise ParameterMissing('consumer_key')
+        try:
+            assert('consumer_secret' in kwargs)
+        except AssertionError:
+            raise ParameterMissing('consumer_secret')
+        try:
+            assert('source' in kwargs)
+        except AssertionError:
+            raise ParameterMissing('source')
+        _delivery_service.__init__(self, **kwargs)
+        self._consumer_key = kwargs['consumer_key']
+        self._consumer_secret = kwargs['consumer_secret']
+        self._source = kwargs['source']
+        self._service = gdata.blogger.service.BloggerService(source=self._source)
+        self._service.SetOAuthInputParameters(
+            gdata.auth.OAuthSignatureMethod.HMAC_SHA1,
+            self._consumer_key,
+            self._consumer_secret
+        )
+        self._token = None
+    def authenticate(self, **kwargs):
+        self._token = None
+        self._token = gdata.auth.OAuthToken(
+            key=kwargs['access_token_key'],
+            secret=kwargs['access_token_secret'],
+            scopes=[gdata.service.CLIENT_LOGIN_SCOPES['blogger']],
+            oauth_input_params=self._service.GetOAuthInputParameters()
+        )
+        self._service.SetOAuthToken(self._token)
+    def deliver(self, message):
+        assert('title' in message)
+        assert('content' in message)
+        try:
+            assert(self._token is not None)
+        except AssertionError:
+            self.authenticate(**message)
+            
+        feed = self._service.GetBlogFeed()
+        blog_id = feed.entry[0].GetSelfLink().href.split("/")[-1]
+        envelope = gdata.GDataEntry()
+        envelope.title = atom.Title('xhtml', message['title'])
+        envelope.content = atom.Content(content_type='html', text=message['content'])
+        response = self._service.Post(entry, '/feeds/' + blog_id + '/posts/default')
+        return receipt('blogger', [], response.GetAlternateLink().href)
+
 #class ApplePushDeliveryMechanism(DeliveryMechanism):
 #    def package(self, message_entry, message, context_evaluation):
 #        user = context_evaluation['users'].get('from', context_evaluation['users']['to'])
@@ -349,15 +369,3 @@ class twitter_service(_delivery_service):
 #            return {'blogger_post_id':receipt.id.text, 'link':receipt.GetAlternateLink().href}
 #        except:
 #            raise
-
-
-
-# Imperative approach
-# This is fundamentally inefficient for sending any quanitity of messages,
-# since it creates the service class anew for each one.  It is provided as a
-# convenience for one-off operations, demonstrations, and to enable sloppy
-# engineering so I can have something to look good compared to.
-def deliver(service, message):
-    for delivery in [email_delivery, facebook_delivery, twitter_delivery]:
-        service = delivery(**service)
-        print service.deliver(message)
