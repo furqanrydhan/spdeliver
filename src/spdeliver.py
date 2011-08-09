@@ -60,14 +60,15 @@ class _delivery_service(object):
     def __init__(self, *args, **kwargs):
         pass
     
-class receipt(object):
+class receipt(dict):
     def __init__(self, type, recipients, link=None, timestamp=None):
-        self.type = type
-        self.recipients = recipients
-        self.link = link
-        self.timestamp = timestamp or time.time()
+        self['type'] = type
+        self['recipients'] = recipients
+        if link is not None:
+            self['link'] = link
+        self['timestamp'] = timestamp or time.time()
     def __str__(self):
-        return 'Delivered ' + self.type + ' message to ' + ', '.join(self.recipients) + ' at ' + time.ctime(self.timestamp) + (' (' + self.link + ')' if self.link is not None else '')
+        return 'Delivered ' + self['type'] + ' message to ' + ', '.join(self['recipients']) + ' at ' + time.ctime(self['timestamp']) + (' (' + self['link'] + ')' if 'link' in self else '')
 
 class email_service(_delivery_service):
     def __init__(self, **kwargs):
@@ -82,11 +83,20 @@ class email_service(_delivery_service):
     def deliver(self, message):
         try:
             assert('text' in message or 'html' in message)
+        except AssertionError:
+            raise ParameterMissing('text')
+        try:
             assert('subject' in message)
+        except AssertionError:
+            raise ParameterMissing('subject')
+        try:
             assert('to' in message)
+        except AssertionError:
+            raise ParameterMissing('to')
+        try:
             assert('from' in message)
         except AssertionError:
-            raise ParameterMissing
+            raise ParameterMissing('from')
 
         envelope = email.mime.multipart.MIMEMultipart('alternative')        
         recipients = []
