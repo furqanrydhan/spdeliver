@@ -24,34 +24,31 @@ import oauth2
 import twitter
 
 
+class DeliveryException(Exception):
+    def __init__(self, message=None):
+        self.message = message
+    def __str__(self):
+        return self.message or 'please check callstack'
 
 # Permanent conditions
-class CredentialsInvalid(Exception):
+class CredentialsInvalid(DeliveryException):
     def __init__(self):
         self.message = 'Credentials invalid'
-    def __str__(self):
-        return self.message
 
-class ParameterMissing(Exception):
+class ParameterMissing(DeliveryException):
     def __init__(self, message=None):
         self.message = message or 'Parameter missing'
-    def __str__(self):
-        return self.message
 
 # Temporary conditions
-class RateLimited(Exception):
+class RateLimited(DeliveryException):
     def __init__(self, retry_in):
         self.message = 'Rate limit exceeded'
         self.retry_in = retry_in
-    def __str__(self):
-        return self.message
 
-class ServiceNotAvailable(Exception):
+class ServiceNotAvailable(DeliveryException):
     def __init__(self, message=None, retry_in=10):
         self.message = message or 'Service not available'
         self.retry_in = retry_in
-    def __str__(self):
-        return self.message
 
 
 

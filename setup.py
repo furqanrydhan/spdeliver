@@ -15,7 +15,7 @@ def setup():
             'spdeliver',
         ],
         dependency_links=[
-            '-e git+https://github.com/facebook/python-sdk.git#egg=facebook-python-sdk',
+            'http://github.com/facebook/python-sdk/tarball/master#egg=facebook-python-sdk',
         ],
         install_requires=[
             'facebook-python-sdk',
