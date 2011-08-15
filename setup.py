@@ -22,7 +22,7 @@ def setup():
             'python-twitter',
             'oauth2',
             'gdata',
-            'APNSWrapper',
+#            'APNSWrapper',
         ],
     )
 

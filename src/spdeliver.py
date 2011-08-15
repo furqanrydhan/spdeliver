@@ -7,6 +7,9 @@ import email.mime.text
 import json
 import os.path
 import smtplib
+import socket
+import ssl
+import struct
 import sys
 import time
 import traceback
@@ -338,41 +341,42 @@ class blogger_service(_delivery_service):
         response = self._service.Post(entry, '/feeds/' + blog_id + '/posts/default')
         return receipt('blogger', [], response.GetAlternateLink().href)
 
-#class ApplePushDeliveryMechanism(DeliveryMechanism):
-#    def package(self, message_entry, message, context_evaluation):
-#        user = context_evaluation['users'].get('from', context_evaluation['users']['to'])
-#        try:
-#            envelope = {
-#                'token':str(user['credentials']['blogger']['blogger_token']),
-#                'secret':str(user['credentials']['blogger']['blogger_secret']),
-#            }
-#        except KeyError:
-#            if user['flags'].get('blogger_credentials_pending', False):
-#                raise CredentialsPending
-#            else:
-#                raise CompositionImpossible('Missing Blogger creds')
-#        for (blogger_key, template_key) in [
-#            ('title', 'title'),
-#            ('content', 'content'),
-#        ]:
-#            if template_key in message and template_key != '':
-#                envelope[blogger_key] = message[template_key]
-#        return envelope
-#    def deliver(self, envelope):
-#        try:
-#            blogger_service = gdata.blogger.service.BloggerService(source=self._settings['blogger']['source'])
-#            blogger_service.SetOAuthInputParameters(
-#                gdata.auth.OAuthSignatureMethod.HMAC_SHA1,
-#                self._settings['blogger']['key'],
-#                consumer_secret=self._settings['blogger']['secret'])
-#            blogger_token = gdata.auth.OAuthToken(key=envelope['token'], secret=envelope['secret'], scopes=[gdata.service.CLIENT_LOGIN_SCOPES['blogger']], oauth_input_params=blogger_service.GetOAuthInputParameters())
-#            blogger_service.SetOAuthToken(blogger_token)
-#            feed = blogger_service.GetBlogFeed()
-#            blog_id = feed.entry[0].GetSelfLink().href.split("/")[-1]
-#            entry = gdata.GDataEntry()
-#            entry.title = atom.Title('xhtml', envelope['title'])
-#            entry.content = atom.Content(content_type='html', text=envelope['content'])
-#            receipt = blogger_service.Post(entry, '/feeds/' + blog_id + '/posts/default')
-#            return {'blogger_post_id':receipt.id.text, 'link':receipt.GetAlternateLink().href}
-#        except:
-#            raise
+class ios_push_service(_delivery_service):
+    def __init__(self, **kwargs):
+        try:
+            assert('certificate' in kwargs)
+        except AssertionError:
+            raise ParameterMissing('certificate')
+        _delivery_service.__init__(self, **kwargs)
+        self._certificate = kwargs['certificate']
+        self._socket = ssl.wrap_socket(socket.socket(socket.AF_INET, socket.SOCK_STREAM), certfile=self._certificate)
+        if kwargs.get('sandbox', False):
+            self._socket.connect(('gateway.sandbox.push.apple.com', 2195))
+        else:
+            self._socket.connect(('gateway.push.apple.com', 2195))
+        self._device_token = None
+    def authenticate(self, **kwargs):
+        self._device_token = kwargs['device_token'].decode('hex')
+    def deliver(self, message):
+        assert('alert' in message)
+        assert('badge' in message)
+        try:
+            assert(self._device_token is not None)
+        except AssertionError:
+            self.authenticate(**message)
+        
+        payload = {
+            'aps':{
+            },
+        }
+        if 'alert' in message:
+            payload['aps']['alert'] = message['alert']
+        if 'badge' in message:
+            payload['aps']['badge'] = message['badge']
+        if 'sound' in message:
+            payload['aps']['sound'] = message['sound']
+        payload = json.dumps(payload)
+        envelope = struct.pack('!BH' + str(len(self._device_token)) + 'sH' + str(len(payload)) + 's', 0, len(self._device_token), self._device_token, len(payload), payload)
+        envelope += struct.pack('%ds' % len(envelope), envelope)
+        self._socket.write(envelope)
+        return receipt('ios_push', [self._device_token])
