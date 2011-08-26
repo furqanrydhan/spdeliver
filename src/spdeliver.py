@@ -349,12 +349,15 @@ class ios_push_service(_delivery_service):
             raise ParameterMissing('certificate')
         _delivery_service.__init__(self, **kwargs)
         self._certificate = kwargs['certificate']
-        self._socket = ssl.wrap_socket(socket.socket(socket.AF_INET, socket.SOCK_STREAM), certfile=self._certificate)
-        if kwargs.get('sandbox', False):
-            self._socket.connect(('gateway.sandbox.push.apple.com', 2195))
-        else:
-            self._socket.connect(('gateway.push.apple.com', 2195))
+        self._host = 'gateway.sandbox.push.apple.com' if kwargs.get('sandbox', False) else 'gateway.push.apple.com'
+        self._port = 2195
         self._device_token = None
+        self.__socket = None
+    def _socket(self):
+        if self.__socket is None:
+            self.__socket = ssl.wrap_socket(socket.socket(socket.AF_INET, socket.SOCK_STREAM), certfile=self._certificate)
+            self.__socket.connect((self._host, self._port))
+        return self.__socket
     def authenticate(self, **kwargs):
         self._device_token = kwargs['device_token'].decode('hex')
     def deliver(self, message):
@@ -375,8 +378,14 @@ class ios_push_service(_delivery_service):
             payload['aps']['badge'] = message['badge']
         if 'sound' in message:
             payload['aps']['sound'] = message['sound']
+        else:
+            payload['aps']['sound'] = 'default'
         payload = json.dumps(payload)
         envelope = struct.pack('!BH' + str(len(self._device_token)) + 'sH' + str(len(payload)) + 's', 0, len(self._device_token), self._device_token, len(payload), payload)
-        envelope += struct.pack('%ds' % len(envelope), envelope)
-        self._socket.write(envelope)
+        for attempt in xrange(0, 2):
+            try:
+                assert(self._socket().write(envelope) > 0)
+                break
+            except (socket.error, AssertionError):
+                self.__socket = None
         return receipt('ios_push', [self._device_token])
