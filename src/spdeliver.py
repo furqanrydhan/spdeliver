@@ -1,5 +1,9 @@
 #!/usr/bin/env python
 
+__version_info__ = (0, 1, 1)
+__version__ = '.'.join([str(i) for i in __version_info__])
+version = __version__
+
 import copy
 import email.mime.image
 import email.mime.multipart
