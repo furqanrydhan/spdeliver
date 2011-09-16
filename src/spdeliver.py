@@ -349,7 +349,7 @@ class android_push_service(_delivery_service):
     def __init__(self, **kwargs):
         _delivery_service.__init__(self, **kwargs)
         self._token = None
-        #taken from example
+
         self._url = 'https://www.google.com/accounts/ClientLogin'
         self._send_url = 'https://android.apis.google.com/c2dm/send'
         self._service = 'ac2dm'
