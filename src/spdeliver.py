@@ -341,6 +341,77 @@ class blogger_service(_delivery_service):
         response = self._service.Post(entry, '/feeds/' + blog_id + '/posts/default')
         return receipt('blogger', [], response.GetAlternateLink().href)
 
+class android_push_service(_delivery_service):
+    def __init__(self, **kwargs):
+        _delivery_service.__init__(self, **kwargs)
+        self._token = None
+        #taken from example
+        self._url = 'https://www.google.com/accounts/ClientLogin'
+        self._send_url = 'https://android.apis.google.com/c2dm/send'
+        self._service = 'ac2dm'
+        self._collapse_key = 1
+
+        self._accountType = kwargs['accountType']
+        self._email = kwargs['email']
+        self._password = kwargs['password']
+        self._source = kwargs['source']
+        
+        self._registration_id = None
+			
+    def _getToken(self):
+        if self._token is None:
+            # Build payload
+            values = {'accountType' : self._accountType,
+            'Email' : self._email,
+            'Passwd' : self._password,
+            'source' : self._source,
+            'service' : self._service}
+            # Build request
+            data = urllib.urlencode(values)
+            request = urllib2.Request(self._url, data)
+            
+            # Post
+            response = urllib2.urlopen(request)
+            responseAsString = response.read()
+            # Format response
+            responseAsList = responseAsString.split('\n')
+
+            self._token = responseAsList[2].split('=')[1]
+        return self._token
+    def authenticate(self, **kwargs):
+        self._device_token = kwargs['device_token'].decode('hex')
+    def deliver(self, message):
+        try:
+            assert(self._token is not None)
+        except AssertionError:
+            self._getToken()
+            self.sendMessage(message)
+            
+    def sendMessage(self, message):
+        self._registration_id = message.get('registration_id', None)
+        if message['registration_id'] is None:
+            return False
+        
+        # Build payload
+        values = {'registration_id' : self._registration_id,
+                    'collapse_key' : self._collapse_key}		
+        if 'data' in message:
+            for key in message['data'].keys():
+                values['data.'+key] = message['data'][key]
+        # Build request
+        headers = {'Authorization': 'GoogleLogin auth=' + self._token}
+        data = urllib.urlencode(values)
+        
+        request = urllib2.Request(self._send_url, data, headers)
+
+        # Post
+        try:
+            response = urllib2.urlopen(request)
+            responseAsString = response.read()
+            return responseAsString
+        except urllib2.HTTPError, e:
+            print 'HTTPError ' + str(e)
+            
 class ios_push_service(_delivery_service):
     def __init__(self, **kwargs):
         try:
