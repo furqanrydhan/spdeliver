@@ -400,8 +400,7 @@ class android_push_service(_delivery_service):
         values = {'registration_id' : self._registration_id,
                     'collapse_key' : self._collapse_key}		
         if 'data' in message:
-            for key in message['data'].keys():
-                values['data.'+key] = message['data'][key]
+            values['data'] = message['data']
         # Build request
         headers = {'Authorization': 'GoogleLogin auth=' + self._token}
         data = urllib.urlencode(values)
