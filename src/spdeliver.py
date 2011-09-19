@@ -29,7 +29,7 @@ import gdata.blogger.service
 import gdata.service
 import oauth2
 import twitter
-
+from twilio.rest import TwilioRestClient
 
 class DeliveryException(Exception):
     def __init__(self, message=None):
@@ -226,7 +226,28 @@ class twitter_service(_delivery_service):
         else:
             tweet_id = self._api().PostUpdate(message['text']).AsDict()['id']
         return receipt('twitter', [message.get('to', self._username)], 'http://www.twitter.com/' + self.__username + '/status/' + tweet_id)
+class twilio_service(_delivery_service):
+    def __init__(self, **kwargs):
+        try:
+            assert('account_id' in kwargs)
+        except AssertionError:
+            raise ParameterMissing('account_id')
+        try:
+            assert('account_token' in kwargs)
+        except AssertionError:
+            raise ParameterMissing('account_token')
+        _delivery_service.__init__(self, **kwargs)
+        self._account_id = kwargs['account_id']
+        self._account_token = kwargs['account_token']
+        
+    def deliver(self, message):
+        assert('to' in message)
+        assert('from' in message)
+        assert('body' in message)
+        
+        client = TwilioRestClient(self._account_id, self._account_token)
 
+        message = client.sms.messages.create(to=message['to'], from_=message['from'], body=message['body'])
 class tumblr_service(_delivery_service):
     def __init__(self, **kwargs):
         try:
