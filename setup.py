@@ -34,9 +34,11 @@ def setup():
             'python-twitter',
             'oauth2',
             'gdata',
+            'twilio'
         ],
         dependency_links=[
             'http://github.com/facebook/python-sdk/tarball/master#egg=facebook-python-sdk',
+            'https://github.com/twilio/twilio-python.git'
         ],
     )
 
