@@ -225,7 +225,7 @@ class twitter_service(_delivery_service):
             tweet_id = self._api().PostDirectMessage(message['to'], message['text']).AsDict()['id']
         else:
             tweet_id = self._api().PostUpdate(message['text']).AsDict()['id']
-        return receipt('twitter', [message.get('to', self._username)], 'http://www.twitter.com/' + self.__username + '/status/' + tweet_id)
+        return receipt('twitter', [message.get('to', self._username)], 'http://www.twitter.com/' + self._username + '/status/' + tweet_id)
 class twilio_service(_delivery_service):
     def __init__(self, **kwargs):
         try:
