@@ -419,7 +419,7 @@ class android_push_service(_delivery_service):
         
         # Build payload
         values = {'registration_id' : self._registration_id,
-                    'collapse_key' : self._collapse_key}		
+                    'collapse_key' : time.time()}		
         if 'data' in message:
             for val in message['data'].keys():
                 values['data.'+val] = message['data'][val]
