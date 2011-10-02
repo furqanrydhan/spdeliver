@@ -410,7 +410,7 @@ class android_push_service(_delivery_service):
             assert(self._token is not None)
         except AssertionError:
             self._getToken()
-            self.sendMessage(message)
+            return self.sendMessage(message)
             
     def sendMessage(self, message):
         self._registration_id = message.get('registration_id', None)
