@@ -438,6 +438,8 @@ class android_push_service(_delivery_service):
             return responseAsString
         except urllib2.HTTPError, e:
             return "android response error: " + e.code
+        except Exception as e:
+            return "android exception: " + e
             
 class ios_push_service(_delivery_service):
     def __init__(self, **kwargs):
