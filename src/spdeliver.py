@@ -406,17 +406,19 @@ class android_push_service(_delivery_service):
     def authenticate(self, **kwargs):
         self._device_token = kwargs['device_token'].decode('hex')
     def deliver(self, message):
+        
+        if self._token is None:
+            self._getToken()
         try:
             assert(self._token is not None)
-        except AssertionError:
-            self._getToken()
-            #return a receipt
             return self.sendMessage(message)
+        except AssertionError:
+            return "error getting token"
             
     def sendMessage(self, message):
         self._registration_id = message.get('registration_id', None)
         if message['registration_id'] is None:
-            return False
+            return "no registration id"
         
         # Build payload
         values = {'registration_id' : self._registration_id,
