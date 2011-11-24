@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-__version_info__ = (0, 1, 1)
+__version_info__ = (0, 1, 2)
 __version__ = '.'.join([str(i) for i in __version_info__])
 version = __version__
 
@@ -9,6 +9,7 @@ import email.mime.image
 import email.mime.multipart
 import email.mime.text
 import json
+import mimetypes
 import os.path
 import smtplib
 import socket
@@ -125,8 +126,36 @@ class email_service(_delivery_service):
                 enclosure.add_header('Content-Disposition', 'inline')
                 envelope.attach(enclosure)
         for attachment in message.get('attachments', {}):
-            # TODO attach arbitrary data
-            pass
+            if not os.path.isfile(attachment):
+                # Non-files are not supported at the moment
+                continue
+            # Guess the content type based on the file's extension.  Encoding
+            # will be ignored, although we should check for simple things like
+            # gzip'd or compressed files.
+            (ctype, encoding) = mimetypes.guess_type(attachment)
+            if ctype is None or encoding is not None:
+                # No guess could be made, or the file is encoded (compressed), so
+                # use a generic bag-of-bits type.
+                ctype = 'application/octet-stream'
+            (maintype, subtype) = ctype.split('/', 1)
+            mode = {'text':'r'}.get('maintype', 'rb')
+            with open(attachment, mode) as f:
+                data = f.read()
+            if maintype == 'text':
+                # Note: we should handle calculating the charset
+                enclosure = email.mime.text.MIMEText(data, _subtype=subtype)
+            elif maintype == 'image':
+                enclosure = email.mime.image.MIMEImage(data, _subtype=subtype)
+            elif maintype == 'audio':
+                enclosure = email.mime.audio.MIMEAudio(data, _subtype=subtype)
+            else:
+                enclosure = email.mime.base.MIMEBase(maintype, subtype)
+                enclosure.set_payload(data)
+                # Encode the payload using Base64
+                email.encoders.encode_base64(enclosure)
+            # Set the filename parameter
+            enclosure.add_header('Content-Disposition', 'attachment', filename=os.path.basename(attachment))
+            envelope.attach(enclosure)
         # Try attaching the text/html after images to see if that placates the Cupertino enigma
         if 'text' in message:
             body = email.mime.text.MIMEText(message['text'], 'plain')
