@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-__version_info__ = (0, 1, 2)
+__version_info__ = (0, 1, 3)
 __version__ = '.'.join([str(i) for i in __version_info__])
 version = __version__
 
@@ -106,9 +106,15 @@ class email_service(_delivery_service):
         envelope = email.mime.multipart.MIMEMultipart('alternative')        
         recipients = []
         for key in ['to', 'cc', 'bcc']:
+            address_list = message.get(key, [])
+            if isinstance(address_list, basestring):
+                address_list = [address_list]
+            cleaned_address_list = []
+            for address in address_list:
+                cleaned_address_list.extend(address.split(','))
             if key in ['to', 'cc']:
-                envelope[key] = ', '.join(message.get(key, []) if isinstance(message.get(key, []), list) else [message[key]])
-            recipients.extend(message.get(key, []) if isinstance(message.get(key, []), list) else [message[key]])
+                envelope[key] = ', '.join(cleaned_address_list)
+            recipients.extend(cleaned_address_list)
         envelope['from'] = message['from']
         envelope['subject'] = message['subject']
         for image in message.get('images', {}):
