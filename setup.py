@@ -30,15 +30,14 @@ def setup():
             'spdeliver',
         ],
         install_requires=[
-            'facebook',
+            'facebook-sdk',
             'python-twitter',
             'oauth2',
             'gdata',
             'twilio'
         ],
         dependency_links=[
-            'https://github.com/stylepage/facebook-sdk.git',
-            'https://github.com/twilio/twilio-python.git'
+            'https://github.com/stylepage/facebook-sdk/tarball/master#egg=facebook-sdk',
         ],
     )
 
