@@ -457,10 +457,10 @@ class android_push_service(_delivery_service):
         
         # Build payload
         values = {'registration_id' : self._registration_id,
-                    'collapse_key' : time.time()}		
+                    'collapse_key' : time.time()}
         if 'data' in message:
             for val in message['data'].keys():
-                values['data.'+val] = message['data'][val]
+                values['data.'+val] = message['data'][val]#.encode('utf-8')
             #values['data'] = message['data']
         # Build request
         headers = {'Authorization': 'GoogleLogin auth=' + self._token}
@@ -474,7 +474,7 @@ class android_push_service(_delivery_service):
             responseAsString = response.read()
             return responseAsString
         except urllib2.HTTPError, e:
-            return "android response error: " + e.code
+            return "android response error: " + srt(e.code)
         except Exception as e:
             return "android exception: " + e
             
