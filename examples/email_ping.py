@@ -5,7 +5,7 @@ import sys
 import time
 
 def ping(address):
-    service = spdeliver.email_service(host='mail1.spcfd.com')
+    service = spdeliver.email_service(host='mail1.alcfd.com')
     print service.deliver({
         'to':address,
         'from':address,

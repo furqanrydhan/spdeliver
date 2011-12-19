@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-__version_info__ = (0, 1, 4)
+__version_info__ = (0, 1, 5)
 __version__ = '.'.join([str(i) for i in __version_info__])
 version = __version__
 
@@ -473,10 +473,12 @@ class android_push_service(_delivery_service):
             response = urllib2.urlopen(request)
             responseAsString = response.read()
             return responseAsString
-        except urllib2.HTTPError, e:
-            return "android response error: " + srt(e.code)
+        except (KeyboardInterrupt, SystemExit):
+            raise
+        except urllib2.HTTPError as e:
+            raise DeliveryException('Unable to reach C2DM endpoint: HTTP ' + str(e.code))
         except Exception as e:
-            return "android exception: " + e
+            raise DeliveryException('Unhandled exception in C2DM code: ' + str(e))
             
 class ios_push_service(_delivery_service):
     def __init__(self, **kwargs):
